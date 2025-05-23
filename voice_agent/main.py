@@ -43,11 +43,11 @@ async def incoming_call():
     tmpl = """<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
-    <ConversationRelay url="wss://{service_url}/twilio-ws" welcomeGreeting="{greeting}" welcomeGreetingInterruptible="none" ttsProvider="ElevenLabs" voice=""></ConversationRelay>
+    <ConversationRelay url="wss://{service_url}/twilio-ws" welcomeGreeting="{greeting}" welcomeGreetingInterruptible="none" ttsProvider="ElevenLabs" voice="{voice_id}"></ConversationRelay>
   </Connect>
 </Response>
     """
-    return HTMLResponse(content=tmpl.format(service_url=service_url, greeting=FrontDeskAssistant.greeting), media_type="application/xml")
+    return HTMLResponse(content=tmpl.format(service_url=service_url, greeting=FrontDeskAssistant.greeting, voice_id=os.getenv("ELEVENLABS_VOICE_ID")), media_type="application/xml")
 
 
 @app.websocket("/twilio-ws")
