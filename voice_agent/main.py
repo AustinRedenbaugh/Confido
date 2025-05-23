@@ -1,5 +1,6 @@
 from flask import Flask, request
 from twilio.twiml.voice_response import VoiceResponse, Gather
+from assistants.front_desk_assistant import FrontDeskAssistant
 
 app = Flask(__name__)
 
@@ -25,7 +26,7 @@ def incoming_call():
     }
 
     response = VoiceResponse()
-    response.say("Hello! I am your front desk voice assistant. How can I help you today?")
+    response.say(FrontDeskAssistant.greeting)
 
     # Gather the first piece of input from the user
     gather = Gather(input='speech', action='/process-speech', method='POST', timeout=5, speechTimeout='auto')
