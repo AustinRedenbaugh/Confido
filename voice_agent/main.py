@@ -1,160 +1,102 @@
-from flask import Flask, request
-from twilio.twiml.voice_response import VoiceResponse, Gather
+import asyncio
+import os
+import uuid
+import json
+import uvicorn
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response
+from openai import OpenAI
+from dotenv import load_dotenv
+from starlette.responses import HTMLResponse
 from assistants.front_desk_assistant import FrontDeskAssistant
 
-app = Flask(__name__)
 
-# In-memory store for conversation state.
-# For production, you'd use a database (e.g., Redis, PostgreSQL)
-# Key: CallSid, Value: dictionary of conversation context
-conversations_state = {}
+from dotenv import load_dotenv
+load_dotenv()
 
-@app.route("/incoming-call", methods=['POST'])
-def incoming_call():
-    """Handles the initial incoming calls from Twilio."""
+# Initialize OpenAI client
+openai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-    print("Incoming call received.")
-    print(f"Request data: {request.values}")
+# Store active sessions
+sessions = {}
 
-    call_sid = request.values.get('CallSid')
-    print(f"Incoming call from: {request.values.get('From')} - CallSid: {call_sid}")
+# Create FastAPI app
+app = FastAPI()
 
-    # Initialize conversation state for this call
-    conversations_state[call_sid] = {
-        "turn_count": 0,
-        "history": []
-    }
+async def ai_response(messages):
+    """Get a response from OpenAI API"""
+    completion = openai.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=messages
+    )
+    return completion.choices[0].message.content
 
-    response = VoiceResponse()
-    response.say(FrontDeskAssistant.greeting)
+@app.post("/incoming-call")
+async def incoming_call():
+    print("POST TwiML")
+    service_url = os.environ.get("NGROK_URL")
+    assert(service_url)
+    if service_url.startswith("http"):
+        from urllib.parse import urlparse
+        service_url = urlparse(service_url).netloc
+        print("service_url: ", service_url)
+    tmpl = """<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect>
+    <ConversationRelay url="wss://{service_url}/twilio-ws" welcomeGreeting="{greeting}" welcomeGreetingInterruptible="none" ttsProvider="ElevenLabs" voice=""></ConversationRelay>
+  </Connect>
+</Response>
+    """
+    return HTMLResponse(content=tmpl.format(service_url=service_url, greeting=FrontDeskAssistant.greeting), media_type="application/xml")
 
-    # Gather the first piece of input from the user
-    gather = Gather(input='speech', action='/process-speech', method='POST', timeout=5, speechTimeout='auto')
-    # You can add hints for better speech recognition if needed:
-    # gather.add_hints(hints="reservations, support, sales")
-    response.append(gather)
 
-    # If the user doesn't say anything, redirect to gather again or say something else
-    response.redirect('/handle-no-input', method='POST')
+@app.websocket("/twilio-ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time communication"""
+    await websocket.accept()
+    call_sid = None
+    
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            if message["type"] == "setup":
+                call_sid = message["callSid"]
+                print(f"Setup for call: {call_sid}")
+                websocket.call_sid = call_sid
+                sessions[call_sid] = [{"role": "system", "content": FrontDeskAssistant.system_prompt}]
+                
+            elif message["type"] == "prompt":
+                print(f"Processing prompt: {message['voicePrompt']}")
+                print(f"Current sessions:\n\n {sessions}")
+                conversation = sessions[websocket.call_sid]
+                conversation.append({"role": "user", "content": message["voicePrompt"]})
+                
+                response = await ai_response(conversation)
+                conversation.append({"role": "assistant", "content": response})
+                
+                await websocket.send_text(
+                    json.dumps({
+                        "type": "text",
+                        "token": response,
+                        "last": True
+                    })
+                )
+                print(f"Sent response: {response}")
+                
+            elif message["type"] == "interrupt":
+                print("Handling interruption.")
+                
+            else:
+                print(f"Unknown message type received: {message['type']}")
+                
+    except WebSocketDisconnect:
+        print("WebSocket connection closed")
+        if call_sid:
+            sessions.pop(call_sid, None)
 
-    return str(response)
 
-@app.route("/process-speech", methods=['POST'])
-def process_speech():
-    """Processes the speech input gathered from the user."""
-    call_sid = request.values.get('CallSid')
-    speech_result = request.values.get('SpeechResult', '').lower()
-    confidence = request.values.get('Confidence', 0.0)
-
-    print(f"CallSid: {call_sid} - User said: '{speech_result}' with confidence: {confidence}")
-
-    response = VoiceResponse()
-
-    # Retrieve or initialize conversation state
-    if call_sid not in conversations_state:
-        # This should ideally not happen if incoming-call was hit first
-        # But as a fallback, initialize
-        conversations_state[call_sid] = {"turn_count": 0, "history": []}
-        response.say("There was an issue retrieving our conversation. Let's start over.")
-        gather = Gather(input='speech', action='/process-speech', method='POST')
-        response.append(gather)
-        response.redirect('/handle-no-input', method='POST')
-        return str(response)
-
-    current_state = conversations_state[call_sid]
-    current_state["turn_count"] += 1
-    current_state["history"].append({"user": speech_result})
-
-    # --- Your AI/Logic to determine the response ---
-    # This is where you'd integrate with your NLU, LLM, or business logic
-    # For this example, let's do some simple conditional logic:
-
-    ai_response_text = ""
-    should_end_call = False
-
-    if "hello" in speech_result or "hi" in speech_result:
-        ai_response_text = "Hello to you too! What can I do for you?"
-    elif "your name" in speech_result:
-        ai_response_text = "I am a helpful voice assistant created by you."
-    elif "how are you" in speech_result:
-        ai_response_text = "I'm doing well, thank you for asking! How can I assist?"
-    elif "bye" in speech_result or "goodbye" in speech_result:
-        ai_response_text = "Goodbye! Have a great day."
-        should_end_call = True
-    elif not speech_result: # Handle cases where SpeechResult might be empty
-        ai_response_text = "I didn't catch that. Could you please repeat?"
-    else:
-        ai_response_text = f"You said: {speech_result}. Is there anything else I can help with?"
-
-    # --- End AI/Logic ---
-
-    response.say(ai_response_text)
-    current_state["history"].append({"assistant": ai_response_text})
-
-    if should_end_call:
-        response.hangup()
-        # Clean up state for this call
-        if call_sid in conversations_state:
-            del conversations_state[call_sid]
-            print(f"Cleaned up state for CallSid: {call_sid}")
-    else:
-        # Gather the next piece of input
-        gather = Gather(input='speech', action='/process-speech', method='POST', timeout=5, speechTimeout='auto')
-        response.append(gather)
-        response.redirect('/handle-no-input', method='POST') # If user doesn't speak
-
-    # Update the state
-    conversations_state[call_sid] = current_state
-    # print(f"Current state for {call_sid}: {conversations_state[call_sid]}")
-
-    return str(response)
-
-@app.route("/handle-no-input", methods=['POST'])
-def handle_no_input():
-    """Handles cases where Twilio's <Gather> times out without user input."""
-    call_sid = request.values.get('CallSid')
-    print(f"No input detected for CallSid: {call_sid}")
-
-    response = VoiceResponse()
-
-    if call_sid in conversations_state:
-        # Example: Give one more chance or hang up
-        if conversations_state[call_sid].get("no_input_attempts", 0) < 1:
-            conversations_state[call_sid]["no_input_attempts"] = conversations_state[call_sid].get("no_input_attempts", 0) + 1
-            response.say("I didn't hear anything. Could you please say that again?")
-            gather = Gather(input='speech', action='/process-speech', method='POST', timeout=5, speechTimeout='auto')
-            response.append(gather)
-            response.redirect('/handle-no-input', method='POST') # Loop back here if still no input
-        else:
-            response.say("I still didn't hear anything. I'll hang up now. Goodbye.")
-            response.hangup()
-            if call_sid in conversations_state:
-                del conversations_state[call_sid] # Clean up state
-    else:
-        # Should not happen if call started correctly
-        response.say("It seems we're having trouble. Goodbye.")
-        response.hangup()
-
-    return str(response)
-
-@app.route("/call-status", methods=['POST'])
-def call_status():
-    """Optional: Receives status updates about the call from Twilio."""
-    call_sid = request.values.get('CallSid')
-    call_status = request.values.get('CallStatus')
-    print(f"Call Status Update - CallSid: {call_sid}, Status: {call_status}")
-
-    # If the call is completed or failed, clean up its state
-    if call_status in ['completed', 'failed', 'canceled', 'busy', 'no-answer']:
-        if call_sid in conversations_state:
-            del conversations_state[call_sid]
-            print(f"Call ended. Cleaned up state for CallSid: {call_sid}")
-
-    return ('', 204) # Respond with 204 No Content or an empty TwiML <Response/>
 
 if __name__ == "__main__":
-    # For development, Flask's built-in server is fine.
-    # For production, use a WSGI server like Gunicorn:
-    # gunicorn --bind 0.0.0.0:5000 app:app
-    # Gunicorn handles concurrent requests better.
-    app.run(debug=True, port=5050)
+    uvicorn.run("main:app", host="0.0.0.0", port=5050, reload=True)

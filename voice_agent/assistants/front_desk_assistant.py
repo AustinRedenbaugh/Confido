@@ -3,6 +3,9 @@ class FrontDeskAssistant:
     Front Desk Assistant for handling incoming calls and providing information.
     """
 
+    # The greeting message that will be played to the user when they call in.
+    greeting = "Hello! I am the amazing front desk voice assistant. How can I help you today?"
+
     # Initialize the assistant with a system prompt and greeting.
     system_prompt = """You are a friendly and professional voice assistant working at the front desk of a doctor's office. Your job is to answer incoming phone calls and help patients with common requests, including:
 
@@ -15,10 +18,8 @@ Speak clearly, patiently, and concisely. If you're unsure about something, offer
 
 Confirm important details like names, dates, and contact info when necessary. Always try to keep the conversation helpful and respectful."""
 
-    greeting = "Hello! I am your front desk voice assistant. How can I help you today?"
-
     # Hard-coded... Would be populated in some manner or another. 
     config = {
-        "tts_model": "twilio-google", # ENUM: ["twilio", "twilio-google", "11labs"]
+        # "tts_model": "twilio-google", # ENUM: ["twilio", "twilio-google", "11labs"]
         "llm_model": "gpt-4", # ENUM: ["gpt-3.5-turbo", "gpt-4"]
     }
