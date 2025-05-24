@@ -1097,6 +1097,18 @@ files = [
 typing-extensions = ">=4.6.0,<4.7.0 || >4.7.0"
 
 [[package]]
+name = "pydub"
+version = "0.25.1"
+description = "Manipulate audio with an simple and easy high level interface"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "pydub-0.25.1-py2.py3-none-any.whl", hash = "sha256:65617e33033874b59d87db603aa1ed450633288aefead953b30bded59cb599a6"},
+    {file = "pydub-0.25.1.tar.gz", hash = "sha256:980a33ce9949cab2a569606b65674d748ecbca4f0796887fd6f46173a7b0d30f"},
+]
+
+[[package]]
 name = "pyjwt"
 version = "2.10.1"
 description = "JSON Web Token implementation in Python"
@@ -1113,6 +1125,23 @@ crypto = ["cryptography (>=3.4.0)"]
 dev = ["coverage[toml] (==5.0.4)", "cryptography (>=3.4.0)", "pre-commit", "pytest (>=6.0.0,<7.0.0)", "sphinx", "sphinx-rtd-theme", "zope.interface"]
 docs = ["sphinx", "sphinx-rtd-theme", "zope.interface"]
 tests = ["coverage[toml] (==5.0.4)", "pytest (>=6.0.0,<7.0.0)"]
+
+[[package]]
+name = "pystache"
+version = "0.6.8"
+description = "Mustache for Python"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "pystache-0.6.8-py3-none-any.whl", hash = "sha256:7211e000974a6e06bce2d4d5cad8df03bcfffefd367209117376e4527a1c3cb8"},
+    {file = "pystache-0.6.8.tar.gz", hash = "sha256:3707518e6a4d26dd189b07c10c669b1fc17df72684617c327bd3550e7075c72c"},
+]
+
+[package.extras]
+cov = ["coverage", "coverage_python_version"]
+doc = ["recommonmark", "sphinx", "sphinx_git", "sphinx_rtd_theme", "sphinxcontrib-apidoc"]
+test = ["pytest", "pytest-cov"]
 
 [[package]]
 name = "python-dotenv"
@@ -1180,6 +1209,20 @@ anyio = ">=3.6.2,<5"
 
 [package.extras]
 full = ["httpx (>=0.27.0,<0.29.0)", "itsdangerous", "jinja2", "python-multipart (>=0.0.18)", "pyyaml"]
+
+[[package]]
+name = "static"
+version = "1.1.1"
+description = "Serve static or templated content via WSGI or stand-alone."
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "static-1.1.1.tar.gz", hash = "sha256:4a2dfc165c9242304b117e80fb200eb62742a1c51dbaac50451419dccee76395"},
+]
+
+[package.dependencies]
+pystache = "*"
 
 [[package]]
 name = "tqdm"
@@ -1486,4 +1529,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12"
-content-hash = "1ebff6e2e8be30a8693dce0d2ad2b2d7bfcd9ef746942ac72b6f62bf5835a3b7"
+content-hash = "8846cfebdefc9137c85342c76a798d4c18e100127c7ba1afcb6abe8a7d7a95f9"
