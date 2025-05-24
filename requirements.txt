@@ -4,3 +4,5 @@ websockets
 python-dotenv
 openai
 twilio
+
+asyncpg

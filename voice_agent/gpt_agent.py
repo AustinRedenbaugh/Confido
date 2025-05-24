@@ -1,5 +1,11 @@
 import json
 from openai import OpenAI
+import os
+import httpx
+from dotenv import load_dotenv
+load_dotenv()
+
+POSTGRESQL_BASE_URL = os.getenv("POSTGRESQL_BASE_URL")
 
 class GPTAgent:
     def __init__(self, openai_client, model="gpt-4o-mini"):
@@ -8,20 +14,32 @@ class GPTAgent:
         self.sessions = {}  # You can inject this externally if needed
         self.available_functions = [
             {
-                "name": "get_weather",
-                "description": "Get the current weather for a location",
+                "name": "fetch_insurance_status",
+                "description": "Check if an insurance provider is accepted by the clinic.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "location": {"type": "string"},
+                        "name": {
+                            "type": "string",
+                            "description": "The name of the insurance provider.",
+                            "enum": [
+                                "BlueCross BlueShield",
+                                "UnitedHealthcare",
+                                "Aetna",
+                                "Cigna",
+                                "Humana",
+                                "Kaiser Permanente"
+                            ]
+                        }
                     },
-                    "required": ["location"]
+                    "required": ["name"]
                 }
             }
         ]
 
+
     def get_functions(self):
-        return { "get_weather": self.get_weather }
+        return { "fetch_insurance_status": self.fetch_insurance_status }
 
     async def handle_response(self, call_sid, user_prompt):
         messages = self.sessions.setdefault(call_sid, [
@@ -69,6 +87,19 @@ class GPTAgent:
             messages.append({"role": "assistant", "content": choice.content})
             return choice.content
 
-    def get_weather(self, location):
-        # Dummy function
-        return {"temperature": "72F", "condition": "Sunny in " + location}
+    async def fetch_insurance_status(name: str) -> bool:
+        """Fetch whether an insurance is accepted based on its name."""
+        url = f"{POSTGRESQL_BASE_URL}/get_insurance_status"
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, params={"name": name})
+                response.raise_for_status()
+                data = response.json()
+                print(f"Insurance status for {name}: {data}")
+                return data["accepted"]
+        except httpx.HTTPStatusError as e:
+            print(f"HTTP error while fetching insurance status: {e}")
+            return False
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            return False
